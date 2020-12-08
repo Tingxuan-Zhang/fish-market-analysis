@@ -1,0 +1,268 @@
+---
+title: "Final_Project"
+output: html_document
+course: Stat 350
+Team: 3
+Name: Jinxi Liu & Tingxuan Zhang
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Multiple regression analysis-the weight of the fish
+
+## Abstract:
+In this project, we would investigate the factors which have effects on the fish weight. For the dataset in the study, 159 fishes’ data were collected in fish market sales with 7 variables, which were the response variable Weight and the 6 predictors we would like to study. With this dataset, a predictive model can be performed using machine friendly data and estimate the weight of fish can be predicted. 
+
+## Introduction:
+We are interested in building reasonable model between the Weight variable and the different lengths, the height, the width values, the type of fish, then do a prediction on weight.
+
+## Data description:
+The dataset is about 159 fishes in fish market with 7 variables. There is 1 response variable and 6 explanatory variables.
+
+There are the first 6 rows of the dataset and the structure of a data object
+```{r}
+mydata <- read.csv("Fish.csv")
+head(mydata)
+str(mydata)
+```
+
+Response variable: 
+1.	Weight: Weight of fish in gram
+
+Explanatory variable: 
+1.	Species: Species name of fish 
+2.	Length1: Vertical length in cm 
+3.	Length2: Diagonal length in cm 
+4.	Length3: Cross length in cm 
+5.	Height: Height in cm 
+6.	Width: Diagonal width in cm
+
+There are 7 levels of Species
+```{r}
+length(unique(mydata$Species))
+```
+
+Additional datapoint:
+The introduced rows are the numbers of the means of each variable from the original dataset of the species bream. The unique data points are being chose since we want to avoid extrapolation. Uses mean we can avoid the data point we made are extrapolation or outliers.
+After defined a new point, we check it is location relative to the RVH to make sure the new data point would fall under interpolation.
+```{r}
+# specify the species of fish
+sub_data = mydata[which(mydata$Species=="Bream"),]
+# compute the hat matrix and save the largest diagonal element as hmax
+X <- cbind(rep(1, nrow(sub_data)), sub_data$Weight, sub_data$Length1,sub_data$Length2, sub_data$Length3, sub_data$Height, sub_data$Width)
+H <- X %*% solve(t(X) %*% X) %*% t(X)
+(h_max <- max(diag(H)))
+
+new_Weight = round(mean(sub_data$Weight),digits = 1)
+new_length1 = round(mean(sub_data$Length1),digits = 1)
+new_length2 = round(mean(sub_data$Length2),digits = 1)
+new_length3 = round(mean(sub_data$Length3),digits = 1)
+new_Height = round(mean(sub_data$Height),digits = 4)
+new_Width = round(mean(sub_data$Width),digits= 4)
+
+# define a new point and check it’s location relative to the RVH.
+x_0<-data.frame( Weight = new_Weight,
+                Length1 = new_length1,
+                Length2 = new_length2,
+                Length3 = new_length3,
+                Height = new_Height, 
+                Width = new_Width)
+x_0 <- as.matrix(cbind(1, x_0), nrow = 1)
+(h_00 <- x_0 %*% solve(t(X) %*% X) %*% t(x_0))
+# Since 0.03032347 < 0.5290972, we conclude that the new data point would fall under interpolation
+# update the data set with new point added
+mydata = rbind(data.frame(Species = "Bream",
+                Weight = new_Weight,
+                Length1 = new_length1,
+                Length2 = new_length2,
+                Length3 = new_length3,
+                Height = new_Height, 
+                Width = new_Width),mydata)
+```
+
+## Methods and Results
+First load the packages we need to use.
+```{r}
+library(tidyverse)
+library(car)
+library(ggplot2)
+library(Hmisc)
+library(faraway)
+library(caret)
+```
+
+We can check the distribution of each predictor by Species.
+```{r}
+ggplot(mydata, aes(x=mydata$Species, y=mydata$Length1, color=mydata$Species)) +
+  geom_boxplot() + ggtitle("Figure 1: boxplot of Species and Length1")
+ggplot(mydata, aes(x=mydata$Species, y=mydata$Length2, color=mydata$Species)) +
+  geom_boxplot() + ggtitle("Figure 2: boxplot of Species and Length2")
+ggplot(mydata, aes(x=mydata$Species, y=mydata$Length3, color=mydata$Species)) +
+  geom_boxplot() + ggtitle("Figure 3: boxplot of Species and Length3")
+ggplot(mydata, aes(x=mydata$Species, y=mydata$Height, color=mydata$Species)) +
+  geom_boxplot() + ggtitle("Figure 4: boxplot of Species and Height")
+ggplot(mydata, aes(x=mydata$Species, y=mydata$Width, color=mydata$Species)) +
+  geom_boxplot() + ggtitle("Figure 5: boxplot of Species and Width")
+ggplot(mydata, aes(x=mydata$Species, y=mydata$Weight, color=mydata$Species)) +
+  geom_boxplot() + ggtitle("Figure 6: boxplot of Species and Weight")
+```
+
+Figure 1-6 shows the boxplot of the distribution between species and Length1, Length2, Length3, Height, Width, Weight respectively from the dataset.
+
+We could see that the value and the range of variables' value are totally different for each species of fish, the mean of predictor's value are different for each specie. So the distribution are different. 
+
+Multiple linear regression is a fundamental practice for this dataset. When analyzing the data using the multiple linear regression models, the response variable will be considered as a linear function of the explanatory variables with an error term. If the data are appropriate to use the linear regression, then the relationship between the response variables and the explanatory variables should be approximately linear. The error term will have a mean of zero and a constant variance, which is normally distributed. 
+
+So we try to do regression analysis for all species of fish.
+
+We first visualize the data with a scatter plot matrix, and calculate the correlation between these variables. By checking the correlation of the variables, we can see if there is correlation exists.
+```{r}
+pairs(mydata,main= "Figure 7: scatterplot matrix of the response variable and predictors")
+# Calculate the correlation between these variables
+cor(mydata[,c(2,3,4,5,6,7)])
+```
+
+Figure 7 shows the scatterplot matrix of the response variable and predictors. From the scatterplot, we observed that the predictors Length1, Length2, Length3, Height, Width might be linearly related to the response variable Weight. 
+
+Mainly, we see that a linear regression model seems appropriate. Another thing to take notice of is the multicollinearity present among the explanatory variables, because there are high correlation between all the parameters and the Weight except Species.
+
+Multicollinearity affects the coefficients and p-values, but it does not influence the predictions, precision of the predictions, and the goodness-of-fit statistics. 
+
+Our goal is doing a prediction, so we do not have to fix it.
+
+Then try to fit the full model, and get the R-squared value to see how it fits.
+```{r}
+mdl0<- lm(Weight~ factor(Species) + 
+                Length1+Length2+Length3+Height+Width,
+                data = mydata)
+sum0<-summary(mdl0)
+sum0$r.squared
+plot(x=mydata$Weight,y=predict(mdl0), xlab = "Weight_observed", ylab = "Weight_predicted",pch = 16, 
+     main = "Figure 8: Weight observed vs Weight predicted")
+abline(0,1,col = "Pink",lwd=3)
+```
+
+Figure 8 shows linear regression of the full model of the weight observed and the weight predicted.
+
+R squared is 0.9362356, seems like good. 
+But as we noticed, each parameter from data set is a measurement of fish. As far as we know the interaction between body measurements are definitely occur. So we may could do a better model.
+
+Try to fit the full model with interaction terms
+```{r}
+mdl<- lm(Weight~ factor(Species) + 
+                Length1*Length2*Length3*Height*Width,
+                data = mydata)
+sum<-summary(mdl)
+sum$r.squared
+plot(x=mydata$Weight,y=predict(mdl), xlab = "Weight_observed", ylab = "Weight_predicted",pch = 16,
+     main = "Figure 9: Weight observed vs Weight predicted")
+abline(0,1,col = "Pink",lwd=3)
+```
+
+Figure 9 is the plot of the full model with interaction terms. It gives a better linear regression of the weight observed and the weight predicted.
+
+R squared is 0.9902657, it's better than befor and this value is really close to 1. Then we could plot residual to do Residual Analysis.
+
+For the full model, the residual plots and Q-Q plots will be study to see whether the assumptions of the linear regression are violated, and whether the variables need transformations.
+
+```{r}
+# Get the residual
+res<- resid(mdl)
+plot(fitted(mdl), res, main = "Figure 10: Residual plot after variance stabilizing")
+# add a horizontal line at 0 
+abline(0,0)
+# create Q-Q plot for residuals
+qqnorm(res, main = "Figure 11: Residual plot after variance stabilizing")
+
+```
+
+Figure 10 is the residual plot of the regression line, we see that the variability increase as the value of predictor increses. The Figure 11 is the Q-Q plot, there are may points not on the straight line. That violated the constant variance assuption, so we can do a variance stabilizing transformation.
+```{r}
+# transform y to squre root of y
+mydata2 <- transform(mydata, Weight=sqrt(Weight))
+mdl1<- lm(Weight~ factor(Species) + 
+                Length1*Length2*Length3*Height*Width,
+                data = mydata2)
+plot(x=mydata2$Weight,y=predict(mdl1), xlab = "Weight_observed", ylab = "Weight_predicted",pch = 16,
+   main = "Figure 12: Weight observed vs Weight predicted after variance stabilizing transformation")
+abline(0,1,col = "Pink",lwd=3)
+res1 <- resid(mdl1)
+plot(fitted(mdl1), res1, main = "Figure 13: Residual plot after variance stabilizing transformation")
+abline(0,0)
+qqnorm(res1, main = "Figure 14: Normal Q-Q plot after variance stabilizing transformation")
+```
+
+Figure 12-14: are plots of Regression plot, Residual plot and Q-Q plot respectively after we did a variance stabilizing transformation.
+
+After transformation, the residual plot looks better because the residuals are almost all around zero. The prediction line still fit the observation points great, but we can see that there is one or two outliers.
+
+Apply Cook’s distance will give us if there are any influential points in the dataset.
+```{r}
+mdl_cook <- cooks.distance(mdl1)
+sort(mdl_cook, decreasing = TRUE)
+which(mdl_cook>1)
+```
+
+There is no observation have a large Cook's distance that larger than 1, no may be no influence point. But the highest value of cook's distance is more greater than the second highest one, and it is the 42th observation.
+
+Specify the 42th row to see the data value.
+```{r}
+mydata2[42,]
+```
+
+We could see the 42th observation with 0 value for fish weight, it is totally impossible. So we try to move this point to see whether the model is fitting better.
+```{r}
+mydata3<-mydata2[-42,]
+mdl2<- lm(Weight~ factor(Species) + 
+                Length1*Length2*Length3*Height*Width,
+                data = mydata3)
+sum2<-summary(mdl2)
+sum2$r.squared
+
+res2 <- resid(mdl2)
+plot(fitted(mdl2), res2, main = "Figure 15: Residual plot after omitting outliers")
+abline(0,0)
+qqnorm(res2, main = "Figure 16: Normal Q-Q plot after omitting outliers")
+
+plot(x=mydata3$Weight,y=predict(mdl2), xlab = "Weight_observed", ylab = "Weight_predicted",pch = 16,
+     main = "Figure 17: Weight observed vs Weight predicted after omitting outliers")
+abline(0,1,col = "Pink",lwd=3)
+```
+
+Figure 15-17: are Residual plot, Q-Q plot and Regression plot respectively after omitting outliers. The model fits better after we omit the outlier.
+
+R squared is 0.9939383,That seems pretty better.
+
+Then do cross validation, Cross Validation estimates the expected level of fit of a model to a data set that is independent of the data that were used to train the model.
+```{r}
+for (i in 1:5) 
+{
+  nsamp<-ceiling(0.8*length(mydata3$Weight))
+  training_samps<-sample(c(1:length(mydata3$Weight)),nsamp)
+  train_data<-mydata3[training_samps,]
+  test_data<-mydata3[-training_samps,]
+  
+  train.lm<-lm(Weight~ factor(Species) + 
+                Length1*Length2*Length3*Height*Width,
+                data = train_data)
+  preds<-predict(train.lm,test_data)
+  R.sq<-R2(preds, test_data$Weight)
+  RMSPE<-RMSE(preds, test_data$Weight)
+  MAPE<-MAE(preds, test_data$Weight)
+  xx<-RMSPE/sd(test_data$Weight)
+  
+  print(c(R.sq,RMSPE,MAPE,xx))
+  # Make a plot
+  plot(x = test_data$Weight, y = preds,
+  xlab = "Weight_observed", ylab = "Weight_predicted",pch = 16)
+  abline(0,1,col = "Pink",lwd=3)
+}
+
+```
+
+We calculate the r squared-R.sq, root mean squared prediction error-RMSPE, maximum absolute prediction error-MAPE, and the ratio of RMSPE and standard deviation. Also plot the Weight observed vs Weight predicted using training data. Use these values and fitting plot to see how good this prediction performed.
+
+## Conclution:
+According to plots and these value, the R.sq values all larger than 0.98, and the ratio of RMSPE and standard deviation are so close to 0, they are all around 0.1. That is really good performance, which means the prediction is doing well. We can conclude that the inear regression model is appropriate for this data set, and prediction of weight can be performed very well.
